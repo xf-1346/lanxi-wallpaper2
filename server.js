@@ -233,15 +233,33 @@ app.post('/api/stats', async (req, res) => {
 
 // ========== 页面路由 ==========
 
+// ========== 页面路由 ==========
+
+// 辅助函数：查找public文件夹路径（适配不同部署环境）
+function getPublicPath() {
+    const possiblePaths = [
+        path.join(__dirname, 'public'),
+        path.join(process.cwd(), 'public'),
+        path.resolve('./public'),
+        '/var/task/public',
+        '/var/task/netlify/functions/public',
+    ];
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) return p;
+    }
+    // 返回第一个路径，让错误信息显示出来
+    return possiblePaths[0];
+}
+
 app.get('/admin', (req, res) => {
     const { password } = req.query;
     if (password === ADMIN_PASSWORD) {
-        // Netlify Functions中sendFile路径可能不对，改用读取文件内容
         try {
-            const adminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8');
+            const publicPath = getPublicPath();
+            const adminHtml = fs.readFileSync(path.join(publicPath, 'admin.html'), 'utf8');
             return res.send(adminHtml);
         } catch (e) {
-            return res.status(500).send('Error loading admin page: ' + e.message);
+            return res.status(500).send('Error loading admin page: ' + e.message + ' (tried paths: ' + getPublicPath() + ')');
         }
     }
     res.send(`<!DOCTYPE html>
@@ -263,21 +281,23 @@ button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4
 
 app.get('/', (req, res) => {
     try {
-        const viewHtml = fs.readFileSync(path.join(__dirname, 'public', 'view.html'), 'utf8');
+        const publicPath = getPublicPath();
+        const viewHtml = fs.readFileSync(path.join(publicPath, 'view.html'), 'utf8');
         res.send(viewHtml);
     } catch (e) {
-        res.status(500).send('Error loading page: ' + e.message);
+        res.status(500).send('Error loading page: ' + e.message + ' (tried: ' + getPublicPath() + ')');
     }
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(getPublicPath()));
 
 app.get('*', (req, res) => {
     try {
-        const viewHtml = fs.readFileSync(path.join(__dirname, 'public', 'view.html'), 'utf8');
+        const publicPath = getPublicPath();
+        const viewHtml = fs.readFileSync(path.join(publicPath, 'view.html'), 'utf8');
         res.send(viewHtml);
     } catch (e) {
-        res.status(500).send('Error loading page: ' + e.message);
+        res.status(500).send('Error loading page: ' + e.message + ' (tried: ' + getPublicPath() + ')');
     }
 });
 
