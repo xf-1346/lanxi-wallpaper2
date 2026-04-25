@@ -7,6 +7,13 @@
   external_node_modules = ["express"]
   included_files = ["public/**"]
 
+# 保护后台页面，防止直接访问静态文件
+[[redirects]]
+  from = "/admin-panel.html"
+  to = "/admin"
+  status = 302
+  force = true
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"

@@ -19,6 +19,11 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
         .header { text-align: center; padding: 60px 20px 50px; }
         .header h1 { 
             font-size: 42px; font-weight: 800; letter-spacing: 3px;
@@ -48,7 +53,25 @@
             box-shadow: 0 20px 40px rgba(58, 123, 213, 0.35);
             border-color: rgba(58, 123, 213, 0.4);
         }
-        .wallpaper-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
+        
+        /* 加载骨架屏 */
+        .wallpaper-item .skeleton {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(90deg, rgba(15,26,46,0.8) 25%, rgba(30,58,95,0.5) 50%, rgba(15,26,46,0.8) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            z-index: 1;
+        }
+        
+        .wallpaper-item img { 
+            width: 100%; height: 100%; object-fit: cover; 
+            transition: opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease;
+            opacity: 0; /* 初始隐藏，加载完成后淡入 */
+        }
+        .wallpaper-item img.loaded { opacity: 1; }
+        .wallpaper-item img.blur-load { filter: blur(20px); }
+        .wallpaper-item img.blur-load.loaded { filter: blur(0); }
+        
         .wallpaper-item:hover img { transform: scale(1.1); }
         
         .hover-info {
@@ -56,6 +79,7 @@
             padding: 20px;
             background: linear-gradient(to top, rgba(12, 18, 32, 0.95), transparent);
             opacity: 0; transition: opacity 0.4s ease;
+            z-index: 2;
         }
         .wallpaper-item:hover .hover-info { opacity: 1; }
         .wallpaper-title {
@@ -136,7 +160,7 @@
         <button class="close-btn" onclick="closeDetail()">&times;</button>
         <div class="detail-container">
             <div class="detail-image">
-                <img id="detailImage" src="" alt="">
+                <img id="detailImage" src="" alt="" decoding="async">
             </div>
             <div class="detail-content">
                 <div class="detail-title-wrap">
@@ -180,29 +204,122 @@
             } catch (e) {}
         }
 
+        // 获取优化的缩略图URL（支持多种图床，压缩到400k以内）
+        function getOptimizedUrl(url, type) {
+            if (!url) return '';
+            
+            // Imgur: i.imgur.com/xxxxx.jpg -> i.imgur.com/xxxxx{m|l|h}.jpg
+            // m=320px (~100-200KB), l=640px (~200-400KB), h=1024px (~400-800KB)
+            if (url.includes('i.imgur.com')) {
+                const match = url.match(/i\.imgur\.com\/([a-zA-Z0-9]+)(\.\w+)$/);
+                if (match) {
+                    const size = type === 'thumb' ? 'm' : (type === 'detail' ? 'l' : 'm');
+                    return `https://i.imgur.com/${match[1]}${size}${match[2]}`;
+                }
+            }
+            
+            // ImgBB: 不支持URL参数缩略图，但cdn域名可能自动优化
+            if (url.includes('ibb.co') || url.includes('imgbb.com')) {
+                return url; // 原图
+            }
+            
+            // Postimg: 支持 ?dl=1 下载，不支持缩略图
+            if (url.includes('postimg.cc') || url.includes('postimage.cc')) {
+                return url;
+            }
+            
+            // SM.MS: 不支持缩略图
+            if (url.includes('sm.ms') || url.includes('smms.app')) {
+                return url;
+            }
+            
+            // GitHub raw: 不支持缩略图
+            if (url.includes('raw.githubusercontent.com')) {
+                return url;
+            }
+            
+            // Catbox: 不支持缩略图
+            if (url.includes('catbox.moe')) {
+                return url;
+            }
+            
+            // 其他图床返回原图
+            return url;
+        }
+
         function renderDisplay() {
             const gallery = document.getElementById('displayGallery');
             if (wallpapers.length === 0) { 
                 gallery.innerHTML = '<p style="color: #8ab4f8; text-align: center;">暂无壁纸</p>'; 
                 return; 
             }
+            
             gallery.innerHTML = wallpapers.map((w, i) => {
-                const descText = w.desc || w.description || '高清精美壁纸，支持手机和电脑使用';
+                // 网格展示用缩略图（m=320px, 约100-200KB），详情页用中等图（l=640px, 约200-400KB）
+                const thumbUrl = getOptimizedUrl(w.url, 'thumb');
+                const detailUrl = getOptimizedUrl(w.url, 'detail');
                 return `
-                <div class="wallpaper-item" onclick="openDetail(${w.id})" style="animation: fadeInUp 0.5s ease ${i * 0.1}s backwards">
-                    <img src="${w.url}" alt="${w.text}" loading="lazy" onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#1a2744,#0f1a2e)';this.parentElement.innerHTML+='<div style=display:flex;align-items:center;justify-content:center;height:100%;color:#8ab4f8>图片加载失败</div>'">
+                <div class="wallpaper-item" onclick="openDetail(${w.id})" style="animation: fadeInUp 0.5s ease ${Math.min(i * 0.1, 0.5)}s backwards" data-id="${w.id}">
+                    <div class="skeleton"></div>
+                    <img data-src="${thumbUrl}" data-detail="${detailUrl}" alt="${w.text}" decoding="async" loading="lazy" fetchpriority="${i < 4 ? 'high' : 'low'}" class="blur-load">
                     <div class="hover-info">
                         <div class="wallpaper-title">${w.text}</div>
                     </div>
                 </div>
             `}).join('');
+            
+            setupLazyLoading();
+        }
+
+        function setupLazyLoading() {
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const src = img.getAttribute('data-src');
+                        if (src) {
+                            img.src = src;
+                            img.onload = () => {
+                                img.classList.add('loaded');
+                                // 移除骨架屏
+                                const skeleton = img.parentElement.querySelector('.skeleton');
+                                if (skeleton) skeleton.style.display = 'none';
+                            };
+                            img.onerror = () => {
+                                // 加载失败时尝试原图
+                                const originalSrc = img.getAttribute('data-src').replace(/m\.(jpg|jpeg|png|gif)$/i, '.$1');
+                                if (originalSrc !== img.getAttribute('data-src')) {
+                                    img.src = originalSrc;
+                                } else {
+                                    img.style.display = 'none';
+                                    img.parentElement.style.background = 'linear-gradient(135deg,#1a2744,#0f1a2e)';
+                                    const skeleton = img.parentElement.querySelector('.skeleton');
+                                    if (skeleton) skeleton.style.display = 'none';
+                                    img.parentElement.innerHTML += '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8ab4f8">图片加载失败</div>';
+                                }
+                            };
+                            img.removeAttribute('data-src');
+                        }
+                        observer.unobserve(img);
+                    }
+                });
+            }, {
+                rootMargin: '50px 0px', // 提前50px开始加载
+                threshold: 0.01
+            });
+
+            document.querySelectorAll('img[data-src]').forEach(img => {
+                imageObserver.observe(img);
+            });
         }
 
         function openDetail(id) {
             const wallpaper = wallpapers.find(w => w.id === id);
             if (!wallpaper) return;
             currentWallpaper = wallpaper;
-            document.getElementById('detailImage').src = wallpaper.url;
+            // 详情页使用中等尺寸图片（l=640px, 约200-400KB）
+            const detailUrl = getOptimizedUrl(wallpaper.url, 'detail');
+            document.getElementById('detailImage').src = detailUrl;
             document.getElementById('detailTitle').textContent = wallpaper.text;
             document.getElementById('detailDesc').textContent = wallpaper.desc || wallpaper.description || '高清精美壁纸，支持手机和电脑使用';
             document.getElementById('detailModal').classList.add('active');
