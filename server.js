@@ -278,17 +278,6 @@ button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4
 <body><div class="login-box"><h2>🔒 管理后台登录</h2><input type="password" id="pwd" placeholder="输入密码"><button onclick="login()">进入后台</button></div>
 <script>function login(){var pwd=document.getElementById('pwd').value;window.location.href='/admin?password='+encodeURIComponent(pwd)}document.getElementById('pwd').addEventListener('keypress',function(e){if(e.key==='Enter')login()})</script>
 </body></html>`);
-});}
-body{background:linear-gradient(135deg,#0c1220 0%,#1a2744 50%,#0f1a2e 100%);color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-.login-box{background:rgba(15,26,46,.8);padding:50px;border-radius:20px;border:1px solid rgba(58,123,213,.3);text-align:center;min-width:300px}
-h2{font-size:24px;margin-bottom:30px;background:linear-gradient(135deg,#5c9cf5,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-input{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(58,123,213,.3);background:rgba(12,18,32,.8);color:#fff;font-size:16px;margin-bottom:20px}
-button{width:100%;padding:15px;background:linear-gradient(135deg,#3a7bd5,#5c9cf5);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:16px;transition:all .3s ease}
-button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4)}
-</style></head>
-<body><div class="login-box"><h2>🔒 管理后台登录</h2><input type="password" id="pwd" placeholder="输入密码"><button onclick="login()">进入后台</button></div>
-<script>function login(){var pwd=document.getElementById('pwd').value;window.location.href='/admin?password='+encodeURIComponent(pwd)}document.getElementById('pwd').addEventListener('keypress',function(e){if(e.key==='Enter')login()})</script>
-</body></html>`);
 });
 
 app.get('/', (req, res) => {
