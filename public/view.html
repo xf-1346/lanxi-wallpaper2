@@ -204,46 +204,53 @@
             } catch (e) {}
         }
 
-        // 获取优化的缩略图URL（支持多种图床，压缩到400k以内）
+        // 获取优化的缩略图URL - 支持多种图床和URL格式
         function getOptimizedUrl(url, type) {
             if (!url) return '';
             
-            // Imgur: i.imgur.com/xxxxx.jpg -> i.imgur.com/xxxxx{m|l|h}.jpg
-            // m=320px (~100-200KB), l=640px (~200-400KB), h=1024px (~400-800KB)
-            if (url.includes('i.imgur.com')) {
-                const match = url.match(/i\.imgur\.com\/([a-zA-Z0-9]+)(\.\w+)$/);
-                if (match) {
-                    const size = type === 'thumb' ? 'm' : (type === 'detail' ? 'l' : 'm');
-                    return `https://i.imgur.com/${match[1]}${size}${match[2]}`;
+            // 1. Imgur 多种URL格式支持
+            // i.imgur.com/xxxxx.jpg -> i.imgur.com/xxxxx{m|l|h}.jpg
+            // imgur.com/xxxxx -> i.imgur.com/xxxxx{m|l|h}.jpg (需要ID)
+            if (url.includes('imgur.com')) {
+                // 提取Imgur ID (5-7位字母数字)
+                const idMatch = url.match(/imgur\.com\/(?:gallery\/)?([a-zA-Z0-9]{5,7})(?:\.[a-z]+)?(?:\?.*)?$/);
+                if (idMatch) {
+                    const id = idMatch[1];
+                    const size = type === 'thumb' ? 'm' : 'l'; // m=320px, l=640px
+                    return `https://i.imgur.com/${id}${size}.jpg`;
+                }
+                // 尝试直接匹配 i.imgur.com/xxxxx.jpg 格式
+                const directMatch = url.match(/i\.imgur\.com\/([a-zA-Z0-9]+)(\.[a-zA-Z]+)(?:\?.*)?$/);
+                if (directMatch) {
+                    const size = type === 'thumb' ? 'm' : 'l';
+                    const ext = directMatch[2] || '.jpg';
+                    return `https://i.imgur.com/${directMatch[1]}${size}${ext}`;
                 }
             }
             
-            // ImgBB: 不支持URL参数缩略图，但cdn域名可能自动优化
+            // 2. ImgBB - 尝试添加缩略图参数
             if (url.includes('ibb.co') || url.includes('imgbb.com')) {
-                return url; // 原图
-            }
-            
-            // Postimg: 支持 ?dl=1 下载，不支持缩略图
-            if (url.includes('postimg.cc') || url.includes('postimage.cc')) {
+                // ImgBB 的缩略图格式: 在URL后加 .th 或改变域名
+                if (type === 'thumb' && url.includes('i.ibb.co')) {
+                    return url.replace('i.ibb.co', 'thumbs2.imgbb.com');
+                }
                 return url;
             }
             
-            // SM.MS: 不支持缩略图
-            if (url.includes('sm.ms') || url.includes('smms.app')) {
+            // 3. Postimg - 支持缩略图
+            if (url.includes('postimg.cc') || url.includes('postimage.cc') || url.includes('i.postimg.cc')) {
+                if (type === 'thumb') {
+                    return url.replace('i.postimg.cc', 'postimg.cc').replace('/images/', '/thumbs/');
+                }
                 return url;
             }
             
-            // GitHub raw: 不支持缩略图
+            // 4. GitHub raw - 使用GitHub的CDN缓存但原图
             if (url.includes('raw.githubusercontent.com')) {
                 return url;
             }
             
-            // Catbox: 不支持缩略图
-            if (url.includes('catbox.moe')) {
-                return url;
-            }
-            
-            // 其他图床返回原图
+            // 5. 其他图床返回原图
             return url;
         }
 

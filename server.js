@@ -251,19 +251,21 @@ function getPublicPath() {
     return possiblePaths[0];
 }
 
-app.get('/admin', (req, res) => {
-    const { password } = req.query;
-    if (password === ADMIN_PASSWORD) {
-        try {
-            // admin-panel.html 已移到 netlify/functions/ 目录，避免被静态文件服务直接暴露
-            const adminPath = path.join(__dirname, 'admin-panel.html');
-            const adminHtml = fs.readFileSync(adminPath, 'utf8');
-            return res.send(adminHtml);
-        } catch (e) {
-            return res.status(500).send('Error loading admin page: ' + e.message);
+// Admin middleware - intercepts /admin before other routes
+app.use((req, res, next) => {
+    const url = req.originalUrl || req.url || '';
+    if (url.startsWith('/admin')) {
+        const password = req.query.password || req.query.pwd || '';
+        if (password === ADMIN_PASSWORD) {
+            try {
+                const adminPath = path.join(__dirname, 'admin-panel.html');
+                const adminHtml = fs.readFileSync(adminPath, 'utf8');
+                return res.send(adminHtml);
+            } catch (e) {
+                return res.status(500).send('Error loading admin page: ' + e.message);
+            }
         }
-    }
-    res.send(`<!DOCTYPE html>
+        return res.send(`<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理后台登录</title>
 <style>
@@ -278,6 +280,14 @@ button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4
 <body><div class="login-box"><h2>🔒 管理后台登录</h2><input type="password" id="pwd" placeholder="输入密码"><button onclick="login()">进入后台</button></div>
 <script>function login(){var pwd=document.getElementById('pwd').value;window.location.href='/admin?password='+encodeURIComponent(pwd)}document.getElementById('pwd').addEventListener('keypress',function(e){if(e.key==='Enter')login()})</script>
 </body></html>`);
+    }
+    next();
+});
+
+// 传统路由也保留作为备份
+app.get('/admin', (req, res) => {
+    // 已由中间件处理，这里不再重复
+    res.status(404).send('Not found');
 });
 
 app.get('/', (req, res) => {
