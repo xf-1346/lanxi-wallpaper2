@@ -49,6 +49,40 @@ app.use((req, res, next) => {
     next();
 });
 
+// ========== Admin 密码中间件（必须在所有路由之前）==========
+app.use((req, res, next) => {
+    const url = req.originalUrl || req.url || '';
+    if (url.startsWith('/admin')) {
+        const password = req.query.password || req.query.pwd || req.body?.password || '';
+        if (password === ADMIN_PASSWORD) {
+            try {
+                // 在 public/ 中查找 admin-panel.html（适配 Netlify 和本地开发）
+                const adminPath = path.join(getPublicPath(), 'admin-panel.html');
+                const adminHtml = fs.readFileSync(adminPath, 'utf8');
+                return res.send(adminHtml);
+            } catch (e) {
+                return res.status(500).send('Error loading admin page: ' + e.message);
+            }
+        }
+        return res.send(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台登录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:linear-gradient(135deg,#0c1220 0%,#1a2744 50%,#0f1a2e 100%);color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+.login-box{background:rgba(15,26,46,.8);padding:50px;border-radius:20px;border:1px solid rgba(58,123,213,.3);text-align:center;min-width:300px}
+h2{font-size:24px;margin-bottom:30px;background:linear-gradient(135deg,#5c9cf5,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+input{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(58,123,213,.3);background:rgba(12,18,32,.8);color:#fff;font-size:16px;margin-bottom:20px}
+button{width:100%;padding:15px;background:linear-gradient(135deg,#3a7bd5,#5c9cf5);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:16px;transition:all .3s ease}
+button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4)}
+</style></head>
+<body><div class="login-box"><h2>🔒 管理后台登录</h2><input type="password" id="pwd" placeholder="输入密码"><button onclick="login()">进入后台</button></div>
+<script>function login(){var pwd=document.getElementById('pwd').value;window.location.href='/admin?password='+encodeURIComponent(pwd)}document.getElementById('pwd').addEventListener('keypress',function(e){if(e.key==='Enter')login()})</script>
+</body></html>`);
+    }
+    next();
+});
+
 // ========== Supabase数据操作（带备用） ==========
 
 async function getWallpapers() {
@@ -233,16 +267,17 @@ app.post('/api/stats', async (req, res) => {
 
 // ========== 页面路由 ==========
 
-// ========== 页面路由 ==========
-
 // 辅助函数：查找public文件夹路径（适配不同部署环境）
 function getPublicPath() {
     const possiblePaths = [
+        path.join(__dirname, '..', '..', 'public'),  // Netlify: /var/task/netlify/functions -> /var/task/public
+        path.join(path.dirname(__dirname), 'public'),
         path.join(__dirname, 'public'),
         path.join(process.cwd(), 'public'),
         path.resolve('./public'),
         '/var/task/public',
         '/var/task/netlify/functions/public',
+        '/var/task/public',
     ];
     for (const p of possiblePaths) {
         if (fs.existsSync(p)) return p;
@@ -250,45 +285,6 @@ function getPublicPath() {
     // 返回第一个路径，让错误信息显示出来
     return possiblePaths[0];
 }
-
-// Admin middleware - intercepts /admin before other routes
-app.use((req, res, next) => {
-    const url = req.originalUrl || req.url || '';
-    if (url.startsWith('/admin')) {
-        const password = req.query.password || req.query.pwd || '';
-        if (password === ADMIN_PASSWORD) {
-            try {
-                const adminPath = path.join(__dirname, 'admin-panel.html');
-                const adminHtml = fs.readFileSync(adminPath, 'utf8');
-                return res.send(adminHtml);
-            } catch (e) {
-                return res.status(500).send('Error loading admin page: ' + e.message);
-            }
-        }
-        return res.send(`<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>管理后台登录</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:linear-gradient(135deg,#0c1220 0%,#1a2744 50%,#0f1a2e 100%);color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-.login-box{background:rgba(15,26,46,.8);padding:50px;border-radius:20px;border:1px solid rgba(58,123,213,.3);text-align:center;min-width:300px}
-h2{font-size:24px;margin-bottom:30px;background:linear-gradient(135deg,#5c9cf5,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-input{width:100%;padding:15px;border-radius:10px;border:1px solid rgba(58,123,213,.3);background:rgba(12,18,32,.8);color:#fff;font-size:16px;margin-bottom:20px}
-button{width:100%;padding:15px;background:linear-gradient(135deg,#3a7bd5,#5c9cf5);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:16px;transition:all .3s ease}
-button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(58,123,213,.4)}
-</style></head>
-<body><div class="login-box"><h2>🔒 管理后台登录</h2><input type="password" id="pwd" placeholder="输入密码"><button onclick="login()">进入后台</button></div>
-<script>function login(){var pwd=document.getElementById('pwd').value;window.location.href='/admin?password='+encodeURIComponent(pwd)}document.getElementById('pwd').addEventListener('keypress',function(e){if(e.key==='Enter')login()})</script>
-</body></html>`);
-    }
-    next();
-});
-
-// 传统路由也保留作为备份
-app.get('/admin', (req, res) => {
-    // 已由中间件处理，这里不再重复
-    res.status(404).send('Not found');
-});
 
 app.get('/', (req, res) => {
     try {
